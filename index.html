@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>משחק פתיתי השלג - חוסן ומדע</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -11,13 +11,15 @@
             overflow: hidden;
             background-color: #f0f9ff;
             font-family: system-ui, -apple-system, sans-serif;
-            touch-action: none; /* מונע זום וגלילה בזמן משחק */
+            touch-action: none; /* מניעת גלילה במובייל כדי לאפשר משחק */
         }
         canvas {
             display: block;
             background: linear-gradient(to bottom, #0c4a6e, #075985);
+            cursor: none; /* הסתרת סמן העכבר בזמן המשחק */
         }
         
+        /* מסך פתיחה וממשקי overlay */
         .overlay-screen {
             position: absolute;
             top: 0;
@@ -30,11 +32,12 @@
             background: rgba(0, 0, 0, 0.75);
             backdrop-filter: blur(5px);
             z-index: 50;
+            cursor: default; /* החזרת הסמן במסכים אלו */
         }
         
         .card {
             background: white;
-            padding: 2rem;
+            padding: 2.5rem;
             border-radius: 1.5rem;
             box-shadow: 0 20px 50px rgba(0,0,0,0.5);
             text-align: center;
@@ -44,16 +47,29 @@
             overflow-y: auto;
         }
 
+        /* עיצוב תעודה */
         .certificate-card {
-            background: #fffbf0;
-            padding: 2.5rem;
+            background: #fffbf0; /* צבע שמנת/קלף */
+            padding: 3rem;
             border-radius: 1rem;
             box-shadow: 0 0 50px rgba(255, 215, 0, 0.5);
             text-align: center;
             max-width: 700px;
             width: 90%;
-            border: 8px double #ca8a04;
+            border: 8px double #ca8a04; /* מסגרת מוזהבת */
             position: relative;
+        }
+        
+        .certificate-card::before {
+            content: '★';
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 3rem;
+            color: #ca8a04;
+            background: #fffbf0;
+            padding: 0 10px;
         }
 
         .answer-btn {
@@ -66,18 +82,29 @@
             text-align: right;
             font-weight: 500;
         }
-        .answer-btn:hover { background-color: #f1f5f9; border-color: #3b82f6; }
+        .answer-btn:hover {
+            background-color: #f1f5f9;
+            border-color: #3b82f6;
+        }
         
+        /* עיצוב כללי למשוב */
         .feedback-container {
-            display: none;
+            display: none; /* מוסתר כברירת מחדל */
             text-align: right;
             padding: 1.5rem;
             border-radius: 1rem;
             margin-top: 1rem;
             border-right: 4px solid;
         }
-        .feedback-success { background-color: #f0fdf4; border-color: #22c55e; }
-        .feedback-error { background-color: #fee2e2; border-color: #ef4444; }
+        /* סגנונות למשוב חיובי ושלילי */
+        .feedback-success {
+            background-color: #f0fdf4;
+            border-color: #22c55e;
+        }
+        .feedback-error {
+            background-color: #fee2e2;
+            border-color: #ef4444;
+        }
         
         .continue-btn {
             background-color: #3b82f6;
@@ -87,71 +114,559 @@
             border-radius: 9999px;
             margin-top: 1.5rem;
             width: 100%;
+            transition: background-color 0.2s;
+        }
+        .continue-btn:hover {
+            background-color: #2563eb;
         }
 
-        .btn-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
-
-        /* כפתורי שליטה לנייד */
-        .mobile-ctrl {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            display: flex;
-            gap: 10px;
-            z-index: 40;
-        }
-        .d-pad {
-            display: grid;
-            grid-template-columns: repeat(3, 50px);
-            grid-template-rows: repeat(2, 50px);
-            gap: 5px;
-        }
-        .ctrl-btn {
-            width: 60px;
-            height: 60px;
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(5px);
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            font-weight: bold;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-        .ctrl-btn:active { background: rgba(255, 255, 255, 0.5); }
-        
-        @media (min-width: 768px) {
-            .mobile-ctrl { display: none; } /* מסתיר במחשב */
+        /* כפתור מבוטל */
+        .btn-disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
         }
     </style>
 </head>
 <body>
 
-    <div class="absolute top-4 left-4 bg-white/90 px-4 py-1 rounded-full shadow-lg z-20 flex items-center gap-3">
-        <span class="text-blue-900 font-bold text-lg">ניקוד: <span id="score-val">0</span></span>
-        <span class="text-gray-600 text-xs font-semibold">שאלה: <span id="progress-val">0</span>/<span id="total-val">0</span></span>
+    <!-- מונה ניקוד -->
+    <div class="absolute top-4 left-4 bg-white/90 px-6 py-2 rounded-full shadow-lg z-20 flex items-center gap-4 pointer-events-none">
+        <span class="text-blue-900 font-bold text-xl">ניקוד: <span id="score-val">0</span></span>
+        <span class="text-gray-600 text-sm font-semibold">שאלה: <span id="progress-val">0</span>/<span id="total-val">0</span></span>
     </div>
 
+    <!-- מסך פתיחה -->
     <div id="start-screen" class="overlay-screen">
         <div class="card">
-            <h1 class="text-2xl md:text-3xl font-bold mb-4 text-blue-800">חוסן בקור: המדע שמאחורי אמבטיית הקרח</h1>
-            <div class="bg-blue-50 p-4 rounded-xl mb-6 text-right text-sm md:text-base">
+            <h1 class="text-3xl font-bold mb-4 text-blue-800">חוסן בקור: המדע שמאחורי אמבטיית הקרח</h1>
+            
+            <div class="bg-blue-50 p-4 rounded-xl mb-6 text-right">
                 <p class="text-blue-900 leading-relaxed">
-                    <strong>הידעתם?</strong> חשיפה מבוקרת לקור לא רק מחזקת את המערכת החיסונית, אלא מעלה את הדופמין ב-250%! 
+                    <strong>הידעתם?</strong> חשיפה מבוקרת לקור קיצוני לא רק מחזקת את המערכת החיסונית, אלא מעלה את רמת הדופמין ב-250%! זהו תהליך שבו הגוף לומד לווסת את מערכת העצבים מול לחץ.
                 </p>
             </div>
-            <div class="mb-6">
-                <label class="block text-gray-700 font-bold mb-2 text-right">איך קוראים לכם?</label>
-                <input type="text" id="player-name-input" placeholder="הקלידו שם..." 
-                       class="w-full p-3 border-2 border-blue-300 rounded-lg text-center focus:outline-none focus:border-blue-600">
+
+            <div class="text-right mb-6">
+                <h3 class="font-bold text-gray-800 mb-2">הוראות משחק:</h3>
+                <ul class="text-gray-600 space-y-1 list-disc list-inside text-sm">
+                    <li>הזיזו את <strong>העכבר</strong> כדי לשלוט בדלי.</li>
+                    <li>תפסו פתיתי שלג כדי לענות על שאלות.</li>
+                    <li>תשובה נכונה = <span class="text-green-600 font-bold">10+</span> נקודות.</li>
+                    <li>תשובה שגויה = <span class="text-red-600 font-bold">5-</span> נקודות.</li>
+                </ul>
             </div>
-            <button id="start-btn" class="bg-blue-600 text-white text-xl font-bold py-3 px-10 rounded-full w-full btn-disabled">
-                בואו נתחיל!
+
+            <!-- הזנת שם -->
+            <div class="mb-8">
+                <label class="block text-gray-700 font-bold mb-2" for="player-name-input">איך קוראים לכם?</label>
+                <input type="text" id="player-name-input" placeholder="הקלידו את שמכם כאן..." 
+                       class="w-full p-3 border-2 border-blue-300 rounded-lg text-lg focus:outline-none focus:border-blue-600 text-center">
+            </div>
+
+            <button id="start-btn" class="bg-blue-600 hover:bg-blue-700 text-white text-xl font-bold py-4 px-10 rounded-full transition-transform transform hover:scale-105 shadow-lg btn-disabled">
+                מוכנים? בואו נתחיל!
             </button>
         </div>
     </div>
 
-    <div id="ui-overlay" class="overlay-screen" style="display:
+    <!-- ממשק השאלה והמשוב -->
+    <div id="ui-overlay" class="overlay-screen" style="display: none;">
+        <div class="card">
+            <h2 class="text-2xl font-bold mb-2 text-blue-800" id="modal-title">שאלה למחשבה</h2>
+            
+            <!-- אזור השאלה -->
+            <div id="question-area">
+                <div id="question-text" class="text-lg mb-6 text-gray-700 font-semibold"></div>
+                <div id="options-container">
+                    <!-- כפתורי תשובות יוזרקו כאן -->
+                </div>
+            </div>
+
+            <!-- אזור המשוב -->
+            <div id="feedback-area" class="feedback-container">
+                <div id="correct-answer-section" class="mb-3">
+                    <p class="text-gray-800 font-bold">התשובה הנכונה היא: <span id="correct-answer-text" class="text-blue-700"></span></p>
+                </div>
+                <div class="bg-white/50 p-3 rounded-lg">
+                    <p class="text-gray-700 text-base leading-relaxed" id="explanation-text"></p>
+                </div>
+                <button id="continue-game-btn" class="continue-btn">המשך</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- מסך תעודה (סיום) -->
+    <div id="certificate-screen" class="overlay-screen" style="display: none;">
+        <div class="certificate-card">
+            <div class="mb-6">
+                <svg class="w-16 h-16 mx-auto text-yellow-500 mb-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                </svg>
+                <h1 class="text-4xl font-serif font-bold text-gray-800 mb-2">תעודת הסמכה: חוסן וקור</h1>
+                <div class="h-1 w-32 bg-yellow-500 mx-auto rounded"></div>
+            </div>
+            
+            <p class="text-xl text-gray-600 mb-2 font-serif italic">מוענקת בזאת ל:</p>
+            <h2 id="cert-name" class="text-3xl font-bold text-blue-900 mb-6 border-b-2 border-gray-200 inline-block px-8 pb-1"></h2>
+            
+            <div class="mb-6 bg-white p-4 rounded-lg shadow-inner">
+                <p class="text-lg text-gray-600">ציון סופי שנצבר:</p>
+                <p id="cert-score" class="text-4xl font-bold text-blue-600">0</p>
+            </div>
+            
+            <p id="cert-feedback" class="text-lg text-gray-700 mb-8 font-medium px-4"></p>
+            
+            <button id="restart-btn" class="bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold py-3 px-8 rounded-full shadow-lg transition-transform transform hover:scale-105">
+                שחק שוב
+            </button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // מסכים
+        const startScreen = document.getElementById('start-screen');
+        const uiOverlay = document.getElementById('ui-overlay');
+        const certificateScreen = document.getElementById('certificate-screen');
+        
+        // אלמנטים מסך פתיחה
+        const startBtn = document.getElementById('start-btn');
+        const nameInput = document.getElementById('player-name-input');
+        
+        // אלמנטים UI משחק
+        const scoreElement = document.getElementById('score-val');
+        const progressElement = document.getElementById('progress-val');
+        const totalElement = document.getElementById('total-val');
+        
+        // אלמנטים מודל שאלה
+        const modalTitle = document.getElementById('modal-title');
+        const questionArea = document.getElementById('question-area');
+        const questionTextElement = document.getElementById('question-text');
+        const optionsContainer = document.getElementById('options-container');
+        const feedbackArea = document.getElementById('feedback-area');
+        const correctAnswerSection = document.getElementById('correct-answer-section');
+        const correctAnswerText = document.getElementById('correct-answer-text');
+        const explanationText = document.getElementById('explanation-text');
+        const continueGameBtn = document.getElementById('continue-game-btn');
+        
+        // אלמנטים תעודה
+        const certName = document.getElementById('cert-name');
+        const certScore = document.getElementById('cert-score');
+        const certFeedback = document.getElementById('cert-feedback');
+        const restartBtn = document.getElementById('restart-btn');
+
+        // מאגר שאלות
+        const questionsPool = [
+            {
+                q: "מה קורה לכלי הדם ההיקפיים (בידיים וברגליים) מיד עם הכניסה למים קפואים?",
+                options: ["הם מתרחבים (Vasodilation)", "הם מתכווצים (Vasoconstriction)", "הם נשארים ללא שינוי", "הם מפסיקים להזרים דם לחלוטין"],
+                correct: 1,
+                explanation: "הגוף שלנו חכם – הוא מצמצם את זרימת הדם לקצוות כדי להגן על הלב והמוח ושומר על טמפרטורת ליבה יציבה."
+            },
+            {
+                q: "איזה מוליך עצבי (נוירוטרנסמיטר) משתחרר בכמות גבוהה ועוזר לשיפור מצב הרוח והריכוז לאחר חשיפה לקור?",
+                options: ["אינסולין", "דופמין", "מלטונין", "קורטיזול"],
+                correct: 1,
+                explanation: "חשיפה לקור מעלה את רמת הדופמין באופן משמעותי (כ-250%) ולזמן ממושך, מה שיוצר תחושת חיוניות ורוגע לאורך שעות."
+            },
+            {
+                q: "כיצד תרגול נשימות איטיות בזמן שהייה במים קרים עוזר לוויסות רגשי?",
+                options: ["הוא מגביר את הלחץ", "הנשימה מאותתת למערכת העצבים לעבור למצב 'רגיעה'", "הוא גורם לעצירת הלב", "אין לו השפעה על הרגש"],
+                correct: 1,
+                explanation: "הנשימה היא הגשר שלנו לשליטה במערכת העצבים האוטונומית. כשאנחנו שולטים בנשימה תחת קור, אנחנו מתרגלים שליטה ברגשות שלנו תחת לחץ."
+            },
+            {
+                q: "מה קורה ללחץ הדם מיד לאחר חשיפה למים קרים?",
+                options: ["יורד משמעותית", "עולה זמנית", "נשאר ללא שינוי", "הופך לא יציב לצמיתות"],
+                correct: 1,
+                explanation: "הקור גורם לכיווץ מהיר של כלי הדם, מה שמעלה את הלחץ באופן זמני כדי להזרים דם לאיברים החיוניים."
+            },
+            {
+                q: "איזה מנגנון בגוף אחראי על 'רעד' כתגובה לקור?",
+                options: ["ניסיון הגוף להפחית חמצן", "התכווצות שרירים לא רצונית לייצור חום", "תגובה אלרגית לקור", "דלקת במערכת העצבים"],
+                correct: 1,
+                explanation: "רעד הוא פעולה אוטומטית של הגוף המפעיל שרירים במהירות כדי לייצר חום פנימי ולשמור על חום הגוף."
+            },
+            {
+                q: "מה קורה לקצב הלב במהלך חשיפה ראשונית למים קרים (שוק הקור)?",
+                options: ["יורד באופן ניכר", "עולה באופן משמעותי", "נעצר לשניות בודדות", "נשאר יציב"],
+                correct: 1,
+                explanation: "תגובת 'הילחם או ברח' מופעלת מיד עם מכת הקור, וגורמת לעלייה חדה ומהירה בקצב הלב."
+            },
+            {
+                q: "מהו משמעות המונח 'היפותרמיה'?",
+                options: ["חום גוף גבוה מדי", "טמפרטורת גוף נמוכה מ-35 מעלות צלזיוס", "תגובה אלרגית לקור", "דלקת במערכת הנשימה"],
+                correct: 1,
+                explanation: "היפותרמיה היא מצב מסוכן שבו הגוף מאבד חום מהר יותר ממה שהוא מייצר אותו, והטמפרטורה צונחת מתחת ל-35 מעלות."
+            },
+            {
+                q: "איזה אפקט יש לחשיפה לקור על מערכת הלימפה (מערכת החיסון)?",
+                options: ["הלימפה מפסיקה לזרום", "התכווצות שרירים מפעילה ומניעה את זרימת הלימפה", "הלימפה הופכת לסמיכה יותר", "אין השפעה על מערכת הלימפה"],
+                correct: 1,
+                explanation: "מערכת הלימפה אין משאבה משלה; הקור גורם לכיווץ שרירים שעוזר 'לסחוט' ולהזרים את נוזל הלימפה בגוף."
+            },
+            {
+                q: "מה ההשפעה של אמבטיות קרח על כאבי שרירים לאחר פעילות גופנית?",
+                options: ["מחמירות את הכאב", "מפחיתות דלקת וכאב", "גורמות לנזק נוסף לשרירים", "אין להן השפעה משמעותית"],
+                correct: 1,
+                explanation: "הקור מכווץ כלי דם ומפחית את התהליך הדלקתי המקומי, מה שמקל על תחושת הכאב ומזרז התאוששות."
+            },
+            {
+                q: "איזה סוג של תאי דם מוגבר בייצור כתוצאה מחשיפה קבועה לקור?",
+                options: ["תאי דם אדומים", "תאי דם לבנים (מערכת החיסון)", "טסיות דם", "פלסמה"],
+                correct: 1,
+                explanation: "הגוף מגיב לקור כאל גורם לחץ מתון, ומגביר את ייצור תאי הדם הלבנים כדי לחזק את ההגנה החיסונית."
+            },
+            {
+                q: "מה קורה לרמות הקורטיזול (הורמון הלחץ) לאחר התרגלות לחשיפות קור?",
+                options: ["עולות באופן קבוע", "יורדות והגוף מגיב טוב יותר ללחץ", "נעלמות לחלוטין", "הופכות לא צפויות"],
+                correct: 1,
+                explanation: "תרגול קבוע מלמד את הגוף לווסת את תגובת הלחץ, ועם הזמן רמות הקורטיזול במנוחה יורדות."
+            },
+            {
+                q: "מהי ההמלצה הרפואית הרווחת לגבי משך זמן באמבטיית קרח למתרגלים מנוסים?",
+                options: ["30 דקות ויותר", "בין 2 ל-5 דקות", "שעה שלמה", "5 שניות בלבד"],
+                correct: 1,
+                explanation: "אין צורך לשהות זמן רב. 2-5 דקות מספיקות בהחלט כדי לקבל את מלוא היתרונות הבריאותיים ללא סיכון מיותר."
+            },
+            {
+                q: "מה קורה לכלי הדם בעור מיד לאחר חשיפה לקור?",
+                options: ["מתרחבים להגברת זרימת הדם", "מתכווצים למניעת איבוד חום", "נשארים ללא שינוי", "נסגרים לחלוטין"],
+                correct: 1,
+                explanation: "זהו מנגנון הישרדותי – כלי הדם השטחיים נסגרים כדי לשמור את הדם החם עמוק בתוך הגוף."
+            },
+            {
+                q: "איזה אפקט יש לחשיפה לקור על תסמיני דיכאון?",
+                options: ["מחמירה אותם", "עשויה להפחית תסמינים בזכות שחרור נוירוטרנסמיטרים", "גורמת לדיכאון חמור יותר", "אין השפעה כלל"],
+                correct: 1,
+                explanation: "שחרור מוגבר של דופמין, נוראדרנלין ואנדורפינים בקור יכול לשפר את מצב הרוח ולהקל על תסמיני דיכאון."
+            },
+            {
+                q: "מהי תגובת 'Diving Reflex' (רפלקס הצלילה) כשפנים נוגעות במים קרים?",
+                options: ["נשימה מהירה ובלתי נשלטת", "האטת קצב הלב לשמירה על חמצן", "עלייה בטמפרטורת הגוף", "אובדן הכרה מיידי"],
+                correct: 1,
+                explanation: "רפלקס יונקים עתיק שגורם להאטה מיידית של הלב כדי לשמר חמצן כשהפנים במים."
+            },
+            {
+                q: "איך משפיעה חשיפה לקור על יכולת התפקוד של מערכת החיסון?",
+                options: ["מחלישה את התגובה החיסונית", "מגבירה ייצור תאים חיסוניים ועמידות למחלות", "הורסת תאי חיסון", "אין השפעה ישירה"],
+                correct: 1,
+                explanation: "חשיפה מבוקרת לקור מאמנת את מערכת החיסון ומגבירה את כמות הלימפוציטים הנלחמים במחלות."
+            },
+            {
+                q: "מהי ההשפעה של חשיפה לקור על רמות החרדה והמתח הנפשי?",
+                options: ["מגבירה חרדה באופן משמעותי", "עוזרת להפחית חרדה ומתח עקב אימון עצבי", "גורמת להתקפי פאניקה", "מחמירה מצבי חרדה כרוניים"],
+                correct: 1,
+                explanation: "האימון להישאר רגועים במצב קיצון פיזי מתרגם ליכולת טובה יותר להישאר רגועים במצבי לחץ נפשיים בחיי היומיום."
+            },
+            {
+                q: "מהי הדרך הנכונה ביותר לצאת מאמבטיית קרח?",
+                options: ["לצאת מיד למקלחת רותחת", "לצאת ולחמם את הגוף בהדרגה (תנועה קלה)", "לקפוץ למים חמים", "להישאר עומדים ללא תנועה"],
+                correct: 1,
+                explanation: "חימום מהיר מדי או מקלחת חמה עלולים לגרום לירידת לחץ דם חדה. עדיף לתת לגוף להתחמם מבפנים בעזרת תנועה (סוס עומד/ג'קסונים)."
+            }
+        ];
+
+        let usedQuestions = [];
+        let currentScore = 0;
+        let isGameStarted = false;
+        let isPaused = false;
+        let playerName = "";
+
+        // הגדרת סה"כ שאלות
+        totalElement.textContent = questionsPool.length;
+
+        // הגדרות רספונסיביות
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // השחקן (הדלי)
+        const player = {
+            x: canvas.width / 2 - 35,
+            y: canvas.height - 120,
+            width: 70,
+            height: 50,
+            color: '#1d4ed8',
+            speed: 8
+        };
+
+        // פתיתי שלג
+        const snowflakes = [];
+        const flakeSpeed = 1.5; 
+
+        // הוספת האזנה לעכבר במקום למקלדת
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isGameStarted || isPaused) return;
+            
+            // חישוב מיקום העכבר ביחס לקנבס
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // עדכון מיקום הדלי למרכז העכבר
+            player.x = mouseX - player.width / 2;
+            player.y = mouseY - player.height / 2;
+
+            // שמירה על גבולות הקנבס
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+            if (player.y < 0) player.y = 0;
+            if (player.y > canvas.height - player.height) player.y = canvas.height - player.height;
+        });
+        
+        // תמיכה בטאץ' למכשירים ניידים
+        canvas.addEventListener('touchmove', (e) => {
+            if (!isGameStarted || isPaused) return;
+            e.preventDefault(); // מניעת גלילת מסך
+            
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const mouseX = touch.clientX - rect.left;
+            const mouseY = touch.clientY - rect.top;
+            
+            player.x = mouseX - player.width / 2;
+            player.y = mouseY - player.height / 2;
+            
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+            if (player.y < 0) player.y = 0;
+            if (player.y > canvas.height - player.height) player.y = canvas.height - player.height;
+        }, { passive: false });
+
+        function createFlake() {
+            if (!isGameStarted || isPaused) return;
+            const x = Math.random() * canvas.width;
+            const size = 15 + Math.random() * 15;
+            const rotation = Math.random() * Math.PI * 2;
+            const rotationSpeed = (Math.random() - 0.5) * 0.05;
+            snowflakes.push({ x, y: -50, size, rotation, rotationSpeed });
+        }
+
+        function drawSnowflake(x, y, size, rotation) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(rotation);
+            ctx.beginPath();
+            ctx.strokeStyle = '#e0f2fe';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 6; i++) {
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, size);
+                ctx.moveTo(0, size * 0.5);
+                ctx.lineTo(size * 0.3, size * 0.7);
+                ctx.moveTo(0, size * 0.5);
+                ctx.lineTo(-size * 0.3, size * 0.7);
+                ctx.rotate(Math.PI / 3);
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function update() {
+            if (!isGameStarted || isPaused) return;
+
+            // עדכון המיקום מבוצע כעת דרך ה-EventListener של העכבר
+            // אנו רק מייצרים פתיתים ובודקים התנגשויות כאן
+
+            if (Math.random() < 0.02) createFlake();
+
+            for (let i = snowflakes.length - 1; i >= 0; i--) {
+                const f = snowflakes[i];
+                f.y += flakeSpeed;
+                f.rotation += f.rotationSpeed;
+
+                if (
+                    player.x < f.x + f.size &&
+                    player.x + player.width > f.x - f.size &&
+                    player.y < f.y + f.size &&
+                    player.y + player.height > f.y - f.size
+                ) {
+                    snowflakes.splice(i, 1);
+                    triggerQuestion();
+                    return;
+                }
+
+                if (f.y > canvas.height + 50) snowflakes.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // דלי
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.fillStyle = '#1e3a8a';
+            ctx.fillRect(player.x - 5, player.y, player.width + 10, 8);
+
+            // פתיתים
+            snowflakes.forEach(f => drawSnowflake(f.x, f.y, f.size, f.rotation));
+
+            requestAnimationFrame(() => {
+                update();
+                draw();
+            });
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function triggerQuestion() {
+            isPaused = true;
+            
+            // בדיקה אם נגמרו השאלות לפני הצגה
+            if (usedQuestions.length >= questionsPool.length) {
+                showCertificate();
+                return;
+            }
+
+            questionArea.style.display = 'block';
+            feedbackArea.style.display = 'none';
+            modalTitle.textContent = "שאלה למחשבה";
+            modalTitle.className = "text-2xl font-bold mb-2 text-blue-800";
+
+            let availableQuestions = questionsPool.filter((_, idx) => !usedQuestions.includes(idx));
+            
+            // אם במקרה קרתה תקלה ואין שאלות (אמור להיות מטופל בבדיקה למעלה)
+            if (availableQuestions.length === 0) {
+                showCertificate();
+                return;
+            }
+
+            let randomIdx = Math.floor(Math.random() * availableQuestions.length);
+            let questionObj = availableQuestions[randomIdx];
+            let originalIdx = questionsPool.indexOf(questionObj);
+            usedQuestions.push(originalIdx);
+
+            // עדכון מונה התקדמות
+            progressElement.textContent = usedQuestions.length;
+
+            questionTextElement.textContent = questionObj.q;
+            optionsContainer.innerHTML = '';
+            
+            let optionsToRender = questionObj.options.map((opt, i) => ({
+                text: opt,
+                isCorrect: i === questionObj.correct
+            }));
+
+            shuffleArray(optionsToRender);
+
+            optionsToRender.forEach((optObj) => {
+                const btn = document.createElement('button');
+                btn.className = 'answer-btn';
+                btn.textContent = optObj.text;
+                btn.onclick = () => checkAnswer(optObj.isCorrect, questionObj);
+                optionsContainer.appendChild(btn);
+            });
+
+            uiOverlay.style.display = 'flex';
+        }
+
+        function checkAnswer(isCorrect, questionObj) {
+            questionArea.style.display = 'none';
+            feedbackArea.style.display = 'block';
+            explanationText.textContent = questionObj.explanation;
+
+            if (isCorrect) {
+                currentScore += 10;
+                modalTitle.textContent = "נכון מאוד!";
+                modalTitle.className = "text-2xl font-bold mb-2 text-green-600";
+                feedbackArea.className = "feedback-container feedback-success";
+                feedbackArea.style.display = 'block';
+                correctAnswerSection.style.display = 'none';
+            } else {
+                currentScore = Math.max(0, currentScore - 5);
+                modalTitle.textContent = "לא מדויק";
+                modalTitle.className = "text-2xl font-bold mb-2 text-red-600";
+                feedbackArea.className = "feedback-container feedback-error";
+                feedbackArea.style.display = 'block';
+                correctAnswerSection.style.display = 'block';
+                correctAnswerText.textContent = questionObj.options[questionObj.correct];
+            }
+            scoreElement.textContent = currentScore;
+        }
+
+        function showCertificate() {
+            isPaused = true;
+            uiOverlay.style.display = 'none';
+            
+            certName.textContent = playerName;
+            certScore.textContent = currentScore;
+            
+            let feedback = '';
+            if (currentScore < 50) {
+                feedback = 'התחלה טובה! נראה שהמים היו קצת קרים מדי. כדאי לנסות שוב ולחזק את הידע.';
+            } else if (currentScore <= 100) {
+                feedback = 'כל הכבוד! יש לכם ידע טוב בחוסן ופיזיולוגיה. אתם בדרך הנכונה.';
+            } else {
+                feedback = 'וואו! אתם מאסטרים של קרח! הפגנתם חוסן וידע יוצא דופן.';
+            }
+            certFeedback.textContent = feedback;
+            
+            certificateScreen.style.display = 'flex';
+        }
+
+        // לוגיקת הזנת שם
+        nameInput.addEventListener('input', (e) => {
+            if (e.target.value.trim().length > 0) {
+                startBtn.classList.remove('btn-disabled');
+            } else {
+                startBtn.classList.add('btn-disabled');
+            }
+        });
+
+        // לחיצה על כפתור "המשך" בחלונית שאלה
+        continueGameBtn.addEventListener('click', () => {
+            uiOverlay.style.display = 'none';
+            
+            // בדיקה אם סיימנו את כל השאלות
+            if (usedQuestions.length >= questionsPool.length) {
+                showCertificate();
+            } else {
+                isPaused = false;
+            }
+        });
+
+        // התחלת משחק
+        startBtn.addEventListener('click', () => {
+            playerName = nameInput.value.trim();
+            if (!playerName) return;
+            
+            startScreen.style.display = 'none';
+            isGameStarted = true;
+        });
+
+        // משחק חוזר
+        restartBtn.addEventListener('click', () => {
+            currentScore = 0;
+            usedQuestions = [];
+            scoreElement.textContent = 0;
+            progressElement.textContent = 0;
+            snowflakes.length = 0; // ניקוי פתיתים קיימים
+            player.x = canvas.width / 2 - 35; // איפוס מיקום שחקן
+            
+            certificateScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+            // לא מאפסים את השם כדי שיהיה נוח לשחק שוב
+            isGameStarted = false;
+            isPaused = false;
+        });
+
+        draw();
+    </script>
+</body>
+</html>
